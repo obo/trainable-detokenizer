@@ -50,6 +50,6 @@ Some vaguely indicative numbers. They hugely depend on the tokenization scheme
 of the particular language and on the type of texts, so you should not really
 trust any comparison with them.
 
-        	| Training Sents	| Test Sents	| Baseline        	| Training Acc	| Test Acc
-        	| -------------:	| ----------:	| -----:          	| -----       	:| -----:
-Japanese	| 115k          	| 5k        	| 73% (drop space)	| 99%         	| 95%
+|       	| Training Sents	| Test Sents	| Baseline        	| Training Acc	| Test Acc
+|  ---  	| -------------:	| ----------:	| -----:          	| -----       	:| -----:
+|Japanese	| 115k          	| 5k        	| 73% (drop space)	| 99%         	| 95%
