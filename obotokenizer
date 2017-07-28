@@ -1,0 +1,113 @@
+#!/usr/bin/env perl
+# Started as trivtokenizer used also by the project InterCorp
+# Ondrej Bojar added more configurability
+use strict;
+use Getopt::Long;
+# warning: Unicode::Regex::Set needed at runtime with --ideographs-eager
+
+binmode(STDIN, ":utf8");
+binmode(STDOUT, ":utf8");
+binmode(STDERR, ":utf8");
+
+sub myhex {
+  my $s = shift;
+  return sprintf("%%%02X", ord($s));
+}
+sub protect {
+  # reverse with:
+  #   =~ s/%([0-9A-Z]{2})/chr(hex($1))/ge;
+  my $s = shift;
+  $s =~ s/([<>%\s&'"|\x00-\x20\s])/myhex($1)/ge;
+  return $s;
+}
+
+my $vertical = 1;
+my $mark_no_space = 1;
+my $print_linebreak = 1;
+my $alphanumbers_eager = 0;
+my $ideographs_eager = 0;
+my $urls = 0;
+my $hashtags = 0;
+my $sgmltags = 0;
+my $ctrl_is_glue = 0;
+GetOptions(
+  "vertical!" => \$vertical,
+  "mark-no-space!" => \$mark_no_space,
+    # mark no space and other special cases with <g/> (glue)
+  "break-mark!" => \$print_linebreak,
+  "alphanumerics-eager!" => \$alphanumbers_eager,
+    # split abc123efg into three tokens
+  "ideographs-eager!" => \$ideographs_eager,
+    # split all CJK unified ideographs from each other
+  "urls!" => \$urls,
+    # preserve urls as a single token
+  "sgmltags!" => \$sgmltags,
+    # preserve <sgml> and <xml/> tags
+  "hashtags!" => \$hashtags,
+    # preserve twitter #tags and @tags
+  "ctrl-is-glue" => \$ctrl_is_glue,
+    # control chars such as Ctrl-V should be part of glue, i.e. whitespace
+) or exit 1;
+
+if ($ideographs_eager) {
+  require Unicode::Regex::Set;
+  #Unicode::Regex::Setqw(parse);
+}
+
+my $glueregex = qr/\s/;
+if ($ctrl_is_glue) {
+  $glueregex = qr/[\s\x00-\x20]/;
+}
+
+my $tokdelim = $vertical ? "\n" : " ";
+my @regex_comps = ();
+# keep URLs untokenized
+if ($urls) {
+  push @regex_comps, qr/https?:\/\/[[:alnum:]][^\s\:\(\)\[\]]*/;
+  # various well known short urls don't need http
+  push @regex_comps, qr/(pic\.twitter\.com|bit\.ly)\/[^\s\:\(\)\[\]]*/;
+}
+# keep twitter hashtags untokenized
+push @regex_comps, qr/[@#][\p{IsAlpha}_\p{IsDigit}]+/ if $hashtags;
+# keep SGML tags untokenized
+push @regex_comps, qr/<[^>]+>/ if $sgmltags;
+# split CJK ideographs in eager mode
+push @regex_comps, qr/[\p{InCJK_Unified_Ideographs}]/ if $ideographs_eager;
+
+# we need to exclude ideographs from isalpha and isword if the eager ideograph
+# should be ever allowed to separate them
+my $setalpha = ($ideographs_eager ? Unicode::Regex::Set::parse('[\p{IsAlpha} - \p{InCJK_Unified_Ideographs}]') : qr/[\p{IsAlpha}]/);
+my $setword = ($ideographs_eager ? Unicode::Regex::Set::parse('[\p{IsWord} - \p{InCJK_Unified_Ideographs}]') : qr/[\p{IsWord}]/);
+# words/aplhanumerics
+push @regex_comps, ($alphanumbers_eager 
+                    ? qr/([\p{IsDigit}]+)|($setalpha+)/ 
+                    : qr/($setword+)/);
+my $beg = 1;
+my $regex_comps = join("|", @regex_comps);
+while (<>) {
+  chomp;
+  my $veta = $_;
+  my $tailglue = $1 if $veta =~ s/($glueregex+)$//;
+  while ($veta =~
+    #                &entities;                  various components   isolate punctuation marks
+    /($glueregex*)((\&[[:alnum:]]+\;)|(\&#[0-9]+\;)|$regex_comps|[,.!?;:%&()#$-+*=\/"`'\p{Punctuation}]|.)/goi)
+  {
+    print $tokdelim if !$beg;
+    if ($mark_no_space && "$1" ne " ") { # mark anything else but " "
+      my $glue = protect($1);
+      my $printglue = ($glue ne "" ? " glue=\"$glue\"" : "");
+      print "<g$printglue/>", $tokdelim if !$beg || $glue ne "";;
+    }
+    $beg = 0;
+    print $2;
+  }
+  if ($tailglue ne "") {
+    print $tokdelim, "<g glue=\"", protect($tailglue), "\"/>";
+  }
+  print $tokdelim."<br/>" if $print_linebreak;
+  if (!$vertical) {
+    print "\n";
+    $beg = 1;
+  }
+}
+
