@@ -20,6 +20,12 @@ A trainable detokenizer relying on [NameTag](http://ufal.mff.cuni.cz/nametag).
   > detokenized-file
 ```
 
+The above procedure is conveniently wrapped in a script:
+
+```bash
+  ./detokenize.sh detokenization-model < tokenized-file > detokenized-file
+```
+
 ## Training (to detokenize obotokenizer):
 
 The following will train a 3-stage recognition process, each trained for 30
